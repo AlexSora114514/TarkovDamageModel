@@ -1,6 +1,5 @@
-▸ 逃离塔科夫 · 理想伤害计算终端
+<img width="1520" height="1210" alt="PAF HP2Y)DAM_H _L(04X5K" src="https://github.com/user-attachments/assets/4a6a1eff-f9af-4983-b72f-9d908da65387" />▸ 逃离塔科夫 · 理想伤害计算终端
 TTK 排行榜 / 护甲穿透模拟 / 伤害期望计算
-理性讨论 · bilibili @离殇_Official
 
 📖 项目简介
 本项目是一个面向《逃离塔科夫》(Escape from Tarkov) 的理想伤害计算终端，用于模拟子弹对护甲/插板的穿透、钝伤、综合伤害以及 TTK（Time To Kill） 排行。
@@ -132,13 +131,10 @@ TTK 排行榜
 
 欢迎理性讨论，拒绝无脑喷。
 
-📺 关于作者
-bilibili：@离殇_Official
-
-专注《逃离塔科夫》数据向内容 · 理性讨论
-
 📄 License
 本项目仅供学习与交流使用，请勿用于商业用途。
 
 ▸ 逃离塔科夫 ◂ — 理想伤害计算终端
 理性讨论，用数据说话。
+
+网站链接https://tarkovdamagemodel.pages.dev/
