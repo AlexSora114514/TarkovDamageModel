@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>塔科夫理想伤害模型</title>
+    <style>
+        :root { --bg: #0a0e14; --card: #141a23; --accent: #c7a55c; --text: #d4cfc4; --sub: #6b7280; --green: #4ade80; --red: #ef4444; --blue: #3b82f6; --yellow: #fbbf24; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', 'Consolas', monospace; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 1400px; }
+        .header { text-align: center; padding: 15px; border-bottom: 2px solid var(--accent); margin-bottom: 20px; position: relative; }
+        .header h1 { font-size: 1.3rem; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; }
+        .header p { font-size: 0.7rem; color: var(--sub); margin-top: 5px; }
+        .rank-btn { position: absolute; top: 10px; right: 0; padding: 8px 16px; background: var(--accent); color: #0a0e14; border: none; border-radius: 4px; font-family: inherit; font-size: 0.75rem; font-weight: bold; cursor: pointer; letter-spacing: 1px; }
+        .rank-btn:hover { background: #d4b36a; }
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--card); border: 1px solid var(--accent); border-radius: 6px; width: 90%; max-width: 1100px; max-height: 85vh; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid #2a3340; }
+        .modal-header h2 { font-size: 0.9rem; color: var(--accent); letter-spacing: 2px; }
+        .modal-close { background: none; border: 1px solid #2a3340; color: var(--text); width: 28px; height: 28px; border-radius: 3px; cursor: pointer; font-size: 1rem; }
+        .modal-close:hover { border-color: var(--accent); color: var(--accent); }
+        .modal-body { overflow-y: auto; padding: 12px 18px 18px; }
+        .modal-body::-webkit-scrollbar { width: 6px; }
+        .modal-body::-webkit-scrollbar-track { background: #0a0e14; }
+        .modal-body::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
+        .modal-note { font-size: 0.65rem; color: var(--sub); margin-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+        .panel { background: var(--card); border: 1px solid #2a3340; border-radius: 4px; padding: 15px; margin-bottom: 15px; }
+        .panel-title { font-size: 0.8rem; color: var(--accent); border-bottom: 1px solid #2a3340; padding-bottom: 8px; margin-bottom: 12px; letter-spacing: 1px; }
+        label { display: block; font-size: 0.7rem; color: var(--sub); margin-bottom: 4px; margin-top: 10px; text-transform: uppercase; }
+        label:first-of-type { margin-top: 0; }
+        select, input[type="number"] { width: 100%; padding: 8px 10px; background: #0a0e14; border: 1px solid #2a3340; color: var(--text); font-family: inherit; font-size: 0.85rem; border-radius: 3px; outline: none; }
+        select:focus, input:focus { border-color: var(--accent); }
+        select option { background: #0a0e14; }
+        .slider-row { display: flex; align-items: center; gap: 10px; }
+        input[type="range"] { flex: 1; height: 4px; -webkit-appearance: none; background: #2a3340; border-radius: 2px; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--accent); border-radius: 50%; cursor: pointer; }
+        .value-display { min-width: 60px; text-align: right; font-weight: bold; color: var(--accent); font-size: 0.9rem; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat { background: #0a0e14; padding: 8px; border-radius: 3px; border-left: 2px solid var(--accent); }
+        .stat-label { font-size: 0.6rem; color: var(--sub); text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 1rem; font-weight: bold; color: var(--text); margin-top: 2px; }
+        .stat-value.green { color: var(--green); }
+        .stat-value.red { color: var(--red); }
+        .stat-value.blue { color: var(--blue); }
+        .stat-value.yellow { color: var(--yellow); }
+        .result-highlight { background: linear-gradient(135deg, #1a2332, #141a23); border: 1px solid var(--accent); border-radius: 4px; padding: 15px; text-align: center; margin-top: 10px; }
+        .result-highlight .big-num { font-size: 2rem; font-weight: bold; color: var(--accent); }
+        .result-highlight .sub-label { font-size: 0.65rem; color: var(--sub); text-transform: uppercase; letter-spacing: 1px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.72rem; margin-top: 10px; }
+        th { background: #1a2332; color: var(--accent); padding: 8px 4px; text-align: center; font-weight: normal; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #2a3340; }
+        td { padding: 6px 4px; text-align: center; border-bottom: 1px solid #1a2332; }
+        tr:hover { background: rgba(199, 165, 92, 0.05); }
+        .table-container { max-height: 350px; overflow-y: auto; border: 1px solid #2a3340; border-radius: 3px; }
+        .table-container::-webkit-scrollbar { width: 6px; }
+        .table-container::-webkit-scrollbar-track { background: #0a0e14; }
+        .table-container::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
+        .footer-note { font-size: 0.6rem; color: var(--sub); text-align: center; margin-top: 15px; padding: 10px; border-top: 1px solid #2a3340; }
+        .sub-stat { font-size: 0.65rem; color: var(--sub); margin-top: 4px; }
+        .broken { color: var(--red); font-weight: bold; }
+        .skill-panel { background: #0a0e14; border: 1px solid #2a3340; border-radius: 3px; padding: 10px; margin-top: 10px; }
+        .skill-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.7rem; margin-bottom: 4px; }
+        .skill-label { color: var(--sub); }
+        .skill-value { color: var(--green); font-weight: bold; }
+        .elite-badge { color: var(--yellow); font-size: 0.6rem; margin-left: 5px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>▸ 逃离塔科夫 ◂</h1>
+        <p>理想伤害计算终端 // 理性讨论// bilibili@离殇_Official</p>
+        <button class="rank-btn" id="rankBtn">TTK 排行榜</button>
+    </div>
+
+    <div class="grid">
+        <div class="panel">
+            <div class="panel-title">▸ 武器配置</div>
+            <label>口径 / 弹药</label>
+            <select id="bulletSelect"></select>
+            <label>武器平台</label>
+            <select id="weaponSelect"></select>
+            <div class="slider-row" style="margin-top:10px;">
+                <input type="range" id="customRpm" min="30" max="1200" value="650" step="10">
+                <span class="value-display" id="rpmValue">650</span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">▸ 护甲配置</div>
+            <label>防弹插板</label>
+            <select id="armorSelect"></select>
+            <label>插板耐久度</label>
+            <div class="slider-row">
+                <input type="range" id="durability" min="0" max="100" value="100" step="1">
+                <span class="value-display" id="durabilityValue">100%</span>
+            </div>
+            <div class="stat-grid" style="margin-top:12px;">
+                <div class="stat">
+                    <div class="stat-label">有效防护等级</div>
+                    <div class="stat-value" id="effClass">6</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">稳穿临界值 a</div>
+                    <div class="stat-value blue" id="effDefense">-</div>
+                </div>
+            </div>
+            <div style="margin-top:8px; font-size:0.7rem; color:var(--sub);">甲皮：6B45（3级芳纶 / 耐久85 / 耐久系数18.75%）</div>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-top:0;">
+        <div class="panel-title">▸ 重型护甲技能等级</div>
+        <label>重甲技能等级（0~51，51=精英）</label>
+        <div class="slider-row">
+            <input type="range" id="armorSkill" min="0" max="51" value="25" step="1">
+            <span class="value-display" id="armorSkillValue">25</span>
+        </div>
+        <div class="skill-panel">
+            <div class="skill-row">
+                <span class="skill-label">当前护甲类型</span>
+                <span class="skill-value" id="armorTypeDisplay">-</span>
+            </div>
+            <div class="skill-row" id="bluntReductionRow">
+                <span class="skill-label">钝伤减免</span>
+                <span class="skill-value" id="bluntReductionDisplay">0%</span>
+            </div>
+            <div class="skill-row" id="ricochetRow" style="display:none;">
+                <span class="skill-label">精英：跳弹率</span>
+                <span class="skill-value elite-badge" id="ricochetDisplay">20%</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="result-highlight">
+        <div class="sub-label">首发命中穿透概率</div>
+        <div class="big-num" id="penChance">0%</div>
+    </div>
+
+    <div class="panel" style="margin-top:15px;">
+        <div class="panel-title">▸ 首发命中分析</div>
+        <div class="stat-grid">
+            <div class="stat">
+                <div class="stat-label">击穿伤害</div>
+                <div class="stat-value green" id="finalDamage">0</div>
+                <div class="sub-stat" id="penWeight">胸部承伤</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">钝伤</div>
+                <div class="stat-value" id="bluntDamage">0</div>
+                <div class="sub-stat" id="bluntWeight">经验数据</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">综合期望伤害</div>
+                <div class="stat-value yellow" id="expectedDamage">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">综合插板损耗</div>
+                <div class="stat-value red" id="armorLoss">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">剩余插板耐久</div>
+                <div class="stat-value blue" id="remainingDurability">0%</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">弹丸数</div>
+                <div class="stat-value" id="pelletCount">1</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-top:15px;">
+        <div class="panel-title">▸ 伤害模拟日志</div>
+        <div class="table-container">
+            <table id="simTable">
+                <thead>
+                    <tr>
+                        <th>子弹数</th>
+                        <th>插板</th>
+                        <th>甲皮</th>
+                        <th>插板稳穿临界值</th>
+                        <th>甲皮稳穿临界值</th>
+                        <th>插板穿透率</th>
+                        <th>击穿伤害</th>
+                        <th>钝伤</th>
+                        <th>综合伤害</th>
+                        <th>插板损耗</th>
+                        <th>甲皮损耗</th>
+                        <th>胸部HP</th>
+                        <th>TTK (毫秒)</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="footer-note">
+        击穿伤害 = 肉伤 × 弹丸数 × 有效护甲等级(穿透 ÷ (稳穿临界值+12.5), 0.6, 1.0) 
+    </div>
+</div>
+
+<!-- TTK 排行榜弹窗 -->
+<div class="modal-overlay" id="rankModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>▸ TTK 排行榜 · 6级钛板 / 满耐久 / 重甲25级 </h2>
+            <button class="modal-close" id="rankClose">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-note">仅统计全自动武器，每颗子弹取其口径下 RPM 最高的两把自动武器</div>
+            <table id="rankTable">
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th>口径</th>
+                        <th>子弹</th>
+                        <th>武器</th>
+                        <th>RPM</th>
+                        <th>穿深</th>
+                        <th>肉伤</th>
+                        <th>TTK (毫秒)</th>
+                        <th>BTK</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ================= 材质数据 =================
+    const PEN_DECAY = {
+        "芳纶": 0.80, "超高分子聚乙烯": 0.78, "复合材料": 0.76,
+        "钛": 0.75, "铝": 0.74, "装甲钢": 0.72, "钢": 0.72, "陶瓷": 0.70
+    };
+    const MAT_DAMAGE = {
+        "芳纶": 0.1875, "超高分子聚乙烯": 0.3375, "复合材料": 0.375,
+        "钛": 0.4125, "铝": 0.45, "装甲钢": 0.525, "钢": 0.525, "陶瓷": 0.6
+    };
+    const getMatDamage = m => MAT_DAMAGE[m] || 0.35;
+    const getPenDecay  = m => PEN_DECAY[m] || 0.75;
+
+    // ================= 甲皮（6B45） =================
+    const LINER = { class: 3, maxDur: 85, mat: "芳纶", penDecay: 0.80, matDamage: 0.1875 };
+
+    // ================= 钝伤基准表（陶瓷29%基准） =================
+    const BLUNT_BASE = {
+        "9x18": 4, "9x19": 4, "9x21": 4, "7.62x25": 4, ".45 ACP": 4, ".357 Magnum": 4,
+        "4.6x30": 6, "5.7x28": 6,
+        "5.45x39": 8, "5.56x45": 8, "5.8x42": 8,
+        "7.62x39": 10, ".300 Blackout": 10, "9x39": 10, ".366": 10,
+        "6.8x51": 13, ".308": 13, "7.62x51": 13, "7.62x54R": 13, "9.3x64": 13,
+        "12/70": 16, "20/70": 16, "23x75": 16, "12.7x55": 16, ".50 AE": 16,
+        ".338 Lapua": 20, ".50 BMG": 20
+    };
+    const BLUNT_REF_BT = 0.29;
+    const getBaseBlunt = cal => BLUNT_BASE[cal] ?? 8;
+
+    function getPenBonus(bullet, group) {
+        if (!group || group.length <= 1) return 1.0;
+        let min = Infinity, max = -Infinity;
+        for (const b of group) { if (b.pen < min) min = b.pen; if (b.pen > max) max = b.pen; }
+        if (max === min) return 1.0;
+        return 1.0 + ((bullet.pen - min) / (max - min)) * 0.2;
+    }
+
+    function calcFixedBlunt(bullet, armor, group, skillReduction) {
+        const base = getBaseBlunt(bullet.cal);
+        const bonus = getPenBonus(bullet, group);
+        const matFactor = (armor.bt ?? BLUNT_REF_BT) / BLUNT_REF_BT;
+        return base * bonus * matFactor * (bullet.pellets || 1) * (1 - (skillReduction || 0));
+    }
+
+    // ================= 子弹数据库 =================
+    const rawBullets = [
+        { cal: ".50 BMG", name: "M903 SLAP", pen: 115, dmg: 160, armorDmg: 90, pellets: 1 },
+        { cal: ".338 Lapua", name: "Magnum AP", pen: 79, dmg: 115, armorDmg: 89, pellets: 1 },
+        { cal: "7.62x54R", name: "7N37", pen: 70, dmg: 72, armorDmg: 88, pellets: 1 },
+        { cal: "7.62x51", name: "M993", pen: 65, dmg: 70, armorDmg: 85, pellets: 1 },
+        { cal: "7.62x54R", name: "SNB", pen: 62, dmg: 75, armorDmg: 87, pellets: 1 },
+        { cal: "5.45x39", name: "7N39 \"针刺\"", pen: 62, dmg: 37, armorDmg: 59, pellets: 1 },
+        { cal: "7.62x51", name: "M61", pen: 60, dmg: 73, armorDmg: 79, pellets: 1 },
+        { cal: "7.62x39", name: "MAI AP", pen: 58, dmg: 53, armorDmg: 76, pellets: 1 },
+        { cal: "5.56x45", name: "SSA AP", pen: 57, dmg: 38, armorDmg: 58, pellets: 1 },
+        { cal: ".50 BMG", name: "M33", pen: 56, dmg: 190, armorDmg: 85, pellets: 1 },
+        { cal: "9.3x64", name: "7N33", pen: 56, dmg: 108, armorDmg: 55, pellets: 1 },
+        { cal: "7.62x54R", name: "7BT1", pen: 55, dmg: 78, armorDmg: 87, pellets: 1 },
+        { cal: "7.62x51", name: "M80A1", pen: 55, dmg: 75, armorDmg: 74, pellets: 1 },
+        { cal: "5.45x39", name: "BS", pen: 54, dmg: 45, armorDmg: 57, pellets: 1 },
+        { cal: "9x39", name: "BP", pen: 54, dmg: 58, armorDmg: 69, pellets: 1 },
+        { cal: "5.56x45", name: "M995", pen: 53, dmg: 42, armorDmg: 52, pellets: 1 },
+        { cal: "5.8x42", name: "DVC12", pen: 52, dmg: 46, armorDmg: 60, pellets: 1 },
+        { cal: "4.6x30", name: "AP SX", pen: 53, dmg: 35, armorDmg: 46, pellets: 1 },
+        { cal: "9x39", name: "SP-6", pen: 48, dmg: 60, armorDmg: 64, pellets: 1 },
+        { cal: ".300 Blackout", name: "AP", pen: 48, dmg: 51, armorDmg: 65, pellets: 1 },
+        { cal: "7.62x39", name: "BP", pen: 47, dmg: 58, armorDmg: 63, pellets: 1 },
+        { cal: ".338 Lapua", name: "Magnum FMJ", pen: 47, dmg: 122, armorDmg: 83, pellets: 1 },
+        { cal: "5.8x42", name: "DVX12", pen: 47, dmg: 48, armorDmg: 54, pellets: 1 },
+        { cal: "6.8x51", name: "SIG Hybrid", pen: 47, dmg: 72, armorDmg: 58, pellets: 1 },
+        { cal: "12.7x55", name: "PS12B", pen: 46, dmg: 102, armorDmg: 57, pellets: 1 },
+        { cal: "5.45x39", name: "BP", pen: 45, dmg: 48, armorDmg: 46, pellets: 1 },
+        { cal: "7.62x54R", name: "7N1 狙击弹", pen: 45, dmg: 84, armorDmg: 84, pellets: 1 },
+        { cal: ".50 BMG", name: "M21", pen: 45, dmg: 220, armorDmg: 55, pellets: 1 },
+        { cal: "5.56x45", name: "M855A1", pen: 44, dmg: 49, armorDmg: 47, pellets: 1 },
+        { cal: "9.3x64", name: "FMJ", pen: 44, dmg: 115, armorDmg: 55, pellets: 1 },
+        { cal: "7.62x51", name: "M80", pen: 43, dmg: 80, armorDmg: 67, pellets: 1 },
+        { cal: "9x39", name: "PAB-9", pen: 43, dmg: 62, armorDmg: 57, pellets: 1 },
+        { cal: ".300 Blackout", name: "CBJ", pen: 43, dmg: 58, armorDmg: 57, pellets: 1 },
+        { cal: "7.62x54R", name: "LPS Gzh", pen: 42, dmg: 81, armorDmg: 78, pellets: 1 },
+        { cal: "7.62x51", name: "M62", pen: 42, dmg: 82, armorDmg: 65, pellets: 1 },
+        { cal: ".366", name: "AP", pen: 42, dmg: 90, armorDmg: 60, pellets: 1 },
+        { cal: "5.45x39", name: "7N40 gs", pen: 42, dmg: 55, armorDmg: 45, pellets: 1 },
+        { cal: ".308", name: "ME", pen: 42, dmg: 80, armorDmg: 78, pellets: 1 },
+        { cal: "7.62x54R", name: "T-46M", pen: 41, dmg: 82, armorDmg: 83, pellets: 1 },
+        { cal: "7.62x39", name: "PP gzh", pen: 41, dmg: 59, armorDmg: 57, pellets: 1 },
+        { cal: "4.6x30", name: "FMJ SX", pen: 40, dmg: 43, armorDmg: 41, pellets: 1 },
+        { cal: ".50 AE", name: "FMJ", pen: 40, dmg: 85, armorDmg: 50, pellets: 1 },
+        { cal: "5.8x42", name: "DBP191", pen: 39, dmg: 53, armorDmg: 43, pellets: 1 },
+        { cal: "9x19", name: "7N31", pen: 39, dmg: 44, armorDmg: 55, pellets: 1 },
+        { cal: "5.56x45", name: "M856A1", pen: 38, dmg: 52, armorDmg: 44, pellets: 1 },
+        { cal: ".45 ACP", name: "AP", pen: 38, dmg: 66, armorDmg: 48, pellets: 1 },
+        { cal: "9x21", name: "7N42 \"凿刀\" 穿甲手枪弹", pen: 38, dmg: 49, armorDmg: 47, pellets: 1 },
+        { cal: "5.45x39", name: "BT", pen: 37, dmg: 54, armorDmg: 44, pellets: 1 },
+        { cal: "5.7x28", name: "SS190", pen: 37, dmg: 49, armorDmg: 43, pellets: 1 },
+        { cal: "7.62x51", name: "BPZ FMJ", pen: 37, dmg: 83, armorDmg: 56, pellets: 1 },
+        { cal: "9.3x64", name: "SP", pen: 37, dmg: 129, armorDmg: 55, pellets: 1 },
+        { cal: "7.62x25", name: "TT M995", pen: 37, dmg: 32, armorDmg: 36, pellets: 1 },
+        { cal: ".300 Blackout", name: "M62 曳光弹", pen: 36, dmg: 54, armorDmg: 40, pellets: 1 },
+        { cal: "7.62x54R", name: "FMJ", pen: 36, dmg: 84, armorDmg: 63, pellets: 1 },
+        { cal: "6.8x51", name: "SIG FMJ", pen: 36, dmg: 80, armorDmg: 49, pellets: 1 },
+        { cal: "7.62x39", name: "PS", pen: 35, dmg: 61, armorDmg: 52, pellets: 1 },
+        { cal: "9x39", name: "7N9 SPP", pen: 35, dmg: 68, armorDmg: 48, pellets: 1 },
+        { cal: ".357 Magnum", name: "FMJ", pen: 35, dmg: 70, armorDmg: 43, pellets: 1 },
+        { cal: "5.45x39", name: "PP", pen: 34, dmg: 51, armorDmg: 42, pellets: 1 },
+        { cal: ".50 BMG", name: "HP", pen: 34, dmg: 260, armorDmg: 22, pellets: 1 },
+        { cal: "5.7x28", name: "L191", pen: 33, dmg: 53, armorDmg: 41, pellets: 1 },
+        { cal: "5.8x42", name: "DBX95", pen: 33, dmg: 57, armorDmg: 40, pellets: 1 },
+        { cal: "5.56x45", name: "Mk 318 Mod 0 (SOST)", pen: 33, dmg: 53, armorDmg: 39, pellets: 1 },
+        { cal: ".50 AE", name: "实心铜弹", pen: 33, dmg: 94, armorDmg: 56, pellets: 1 },
+        { cal: "9x21", name: "SP13", pen: 32, dmg: 52, armorDmg: 42, pellets: 1 },
+        { cal: ".338 Lapua", name: "UPZ Magnum", pen: 32, dmg: 142, armorDmg: 70, pellets: 1 },
+        { cal: "4.6x30", name: "JSP SX", pen: 32, dmg: 46, armorDmg: 37, pellets: 1 },
+        { cal: "5.56x45", name: "M855", pen: 31, dmg: 54, armorDmg: 37, pellets: 1 },
+        { cal: "7.62x54R", name: "SP BT", pen: 31, dmg: 92, armorDmg: 56, pellets: 1 },
+        { cal: "7.62x25", name: "TT M855A1", pen: 31, dmg: 34, armorDmg: 33, pellets: 1 },
+        { cal: "7.62x39", name: "T45M1", pen: 30, dmg: 65, armorDmg: 46, pellets: 1 },
+        { cal: ".366", name: "TKM EKO", pen: 30, dmg: 73, armorDmg: 40, pellets: 1 },
+        { cal: "9x19", name: "AP 6.3", pen: 30, dmg: 52, armorDmg: 48, pellets: 1 },
+        { cal: "7.62x51", name: "TCW SP", pen: 30, dmg: 85, armorDmg: 25, pellets: 1 },
+        { cal: ".300 Blackout", name: "BPZ FMJ", pen: 30, dmg: 60, armorDmg: 36, pellets: 1 },
+        { cal: "7.62x39", name: "US", pen: 29, dmg: 56, armorDmg: 42, pellets: 1 },
+        { cal: "5.45x39", name: "PS", pen: 28, dmg: 56, armorDmg: 40, pellets: 1 },
+        { cal: "9x18", name: "PM PBM", pen: 28, dmg: 40, armorDmg: 30, pellets: 1 },
+        { cal: "9x39", name: "SP-5", pen: 28, dmg: 71, armorDmg: 39, pellets: 1 },
+        { cal: "12.7x55", name: "PS12", pen: 28, dmg: 115, armorDmg: 60, pellets: 1 },
+        { cal: "5.7x28", name: "SB193", pen: 27, dmg: 59, armorDmg: 37, pellets: 1 },
+        { cal: "9x21", name: "7U4", pen: 27, dmg: 53, armorDmg: 44, pellets: 1 },
+        { cal: "7.62x25", name: "TT M856A1", pen: 27, dmg: 36, armorDmg: 31, pellets: 1 },
+        { cal: "7.62x39", name: "FMJ", pen: 26, dmg: 63, armorDmg: 33, pellets: 1 },
+        { cal: "7.62x54R", name: "HP BT", pen: 26, dmg: 102, armorDmg: 37, pellets: 1 },
+        { cal: ".50 AE", name: "Hawk JSP", pen: 26, dmg: 122, armorDmg: 28, pellets: 1 },
+        { cal: "7.62x25", name: "TT Pst gzh", pen: 25, dmg: 50, armorDmg: 36, pellets: 1 },
+        { cal: "5.7x28", name: "SS197SR", pen: 25, dmg: 62, armorDmg: 22, pellets: 1 },
+        { cal: ".45 ACP", name: "FMJ", pen: 25, dmg: 72, armorDmg: 36, pellets: 1 },
+        { cal: "5.45x39", name: "FMJ", pen: 24, dmg: 55, armorDmg: 38, pellets: 1 },
+        { cal: "9x18", name: "PM PMM", pen: 24, dmg: 58, armorDmg: 33, pellets: 1 },
+        { cal: ".357 Magnum", name: "JHP", pen: 24, dmg: 88, armorDmg: 28, pellets: 1 },
+        { cal: ".308", name: "ME LOKT", pen: 24, dmg: 96, armorDmg: 55, pellets: 1 },
+        { cal: ".366", name: "TKM FMJ", pen: 23, dmg: 98, armorDmg: 48, pellets: 1 },
+        { cal: "5.56x45", name: "55 FMJ", pen: 23, dmg: 57, armorDmg: 33, pellets: 1 },
+        { cal: "4.6x30", name: "Subsonic SX", pen: 23, dmg: 52, armorDmg: 33, pellets: 1 },
+        { cal: "9x21", name: "SP10", pen: 22, dmg: 59, armorDmg: 39, pellets: 1 },
+        { cal: "9x19", name: "Pst", pen: 20, dmg: 54, armorDmg: 33, pellets: 1 },
+        { cal: "5.45x39", name: "T", pen: 20, dmg: 59, armorDmg: 36, pellets: 1 },
+        { cal: ".300 Blackout", name: "V-Max", pen: 20, dmg: 72, armorDmg: 25, pellets: 1 },
+        { cal: "7.62x39", name: "SP", pen: 20, dmg: 68, armorDmg: 27, pellets: 1 },
+        { cal: ".45 ACP", name: "Lasermatch FMJ", pen: 19, dmg: 76, armorDmg: 37, pellets: 1 },
+        { cal: "7.62x25", name: "TT PT gzh", pen: 18, dmg: 55, armorDmg: 34, pellets: 1 },
+        { cal: "9x18", name: "PM 9 BZT gzh", pen: 18, dmg: 53, armorDmg: 28, pellets: 1 },
+        { cal: "5.56x45", name: "M856", pen: 18, dmg: 60, armorDmg: 26, pellets: 1 },
+        { cal: "9x21", name: "SP11", pen: 18, dmg: 65, armorDmg: 44, pellets: 1 },
+        { cal: "4.6x30", name: "Action SX", pen: 18, dmg: 65, armorDmg: 28, pellets: 1 },
+        { cal: ".338 Lapua", name: "TAC-X", pen: 18, dmg: 196, armorDmg: 55, pellets: 1 },
+        { cal: ".357 Magnum", name: "Hollow Point", pen: 18, dmg: 99, armorDmg: 20, pellets: 1 },
+        { cal: "9x19", name: "FMJ M882", pen: 18, dmg: 56, armorDmg: 35, pellets: 1 },
+        { cal: "5.45x39", name: "US", pen: 17, dmg: 65, armorDmg: 33, pellets: 1 },
+        { cal: "5.7x28", name: "SS198LF", pen: 17, dmg: 70, armorDmg: 19, pellets: 1 },
+        { cal: "9x39", name: "FMJ", pen: 17, dmg: 75, armorDmg: 28, pellets: 1 },
+        { cal: "5.45x39", name: "SP", pen: 15, dmg: 67, armorDmg: 31, pellets: 1 },
+        { cal: "7.62x39", name: "HP", pen: 15, dmg: 80, armorDmg: 20, pellets: 1 },
+        { cal: "9x21", name: "SP12", pen: 15, dmg: 80, armorDmg: 63, pellets: 1 },
+        { cal: "7.62x51", name: "Ultra Nosler", pen: 15, dmg: 105, armorDmg: 40, pellets: 1 },
+        { cal: "7.62x25", name: "TT P gl", pen: 14, dmg: 58, armorDmg: 32, pellets: 1 },
+        { cal: ".366", name: "TKM Geksa", pen: 14, dmg: 110, armorDmg: 38, pellets: 1 },
+        { cal: "9x19", name: "绿色曳光弹", pen: 14, dmg: 58, armorDmg: 33, pellets: 1 },
+        { cal: ".300 Blackout", name: "Whisper", pen: 14, dmg: 90, armorDmg: 18, pellets: 1 },
+        { cal: "5.45x39", name: "PRS", pen: 13, dmg: 70, armorDmg: 24, pellets: 1 },
+        { cal: "9x18", name: "PM RG028 gzh", pen: 13, dmg: 65, armorDmg: 26, pellets: 1 },
+        { cal: ".45 ACP", name: "Hydra-Shok", pen: 13, dmg: 100, armorDmg: 30, pellets: 1 },
+        { cal: "7.62x25", name: "TT AKBS", pen: 12, dmg: 58, armorDmg: 32, pellets: 1 },
+        { cal: "9x18", name: "PM Pst gzh", pen: 12, dmg: 50, armorDmg: 26, pellets: 1 },
+        { cal: ".357 Magnum", name: "Soft Point", pen: 12, dmg: 108, armorDmg: 15, pellets: 1 },
+        { cal: ".50 AE", name: "JHP", pen: 12, dmg: 147, armorDmg: 23, pellets: 1 },
+        { cal: "7.62x25", name: "TT FMJ43", pen: 11, dmg: 60, armorDmg: 29, pellets: 1 },
+        { cal: "5.56x45", name: "Mk 255 Mod 0", pen: 11, dmg: 72, armorDmg: 24, pellets: 1 },
+        { cal: "5.7x28", name: "R37.X", pen: 11, dmg: 81, armorDmg: 9, pellets: 1 },
+        { cal: "9x19", name: "PSO gzh", pen: 10, dmg: 59, armorDmg: 32, pellets: 1 },
+        { cal: "9x19", name: "Luger CCI", pen: 10, dmg: 70, armorDmg: 38, pellets: 1 },
+        { cal: "12.7x55", name: "PS12A", pen: 10, dmg: 165, armorDmg: 22, pellets: 1 },
+        { cal: "5.45x39", name: "HP", pen: 9, dmg: 76, armorDmg: 15, pellets: 1 },
+        { cal: "7.62x25", name: "TT LRN", pen: 8, dmg: 64, armorDmg: 28, pellets: 1 },
+        { cal: "9x18", name: "PM PPT gzh", pen: 8, dmg: 59, armorDmg: 22, pellets: 1 },
+        { cal: "5.7x28", name: "R37.F", pen: 8, dmg: 98, armorDmg: 7, pellets: 1 },
+        { cal: "9x19", name: "QuakeMaker", pen: 8, dmg: 85, armorDmg: 22, pellets: 1 },
+        { cal: "7.62x25", name: "TT LRNPC", pen: 7, dmg: 66, armorDmg: 27, pellets: 1 },
+        { cal: "9x18", name: "PM PPe gzh", pen: 7, dmg: 61, armorDmg: 15, pellets: 1 },
+        { cal: "5.56x45", name: "55 HP", pen: 7, dmg: 79, armorDmg: 22, pellets: 1 },
+        { cal: "9x18", name: "PM PRS gs", pen: 6, dmg: 58, armorDmg: 16, pellets: 1 },
+        { cal: "9x18", name: "PM PS gs PPO", pen: 6, dmg: 55, armorDmg: 16, pellets: 1 },
+        { cal: "9x18", name: "PM 9 P gzh", pen: 5, dmg: 50, armorDmg: 16, pellets: 1 },
+        { cal: "9x18", name: "PM PSO gzh", pen: 5, dmg: 54, armorDmg: 13, pellets: 1 },
+        { cal: "9x18", name: "PM PSV", pen: 3, dmg: 69, armorDmg: 5, pellets: 1 },
+        { cal: "5.56x45", name: "Warmage", pen: 3, dmg: 88, armorDmg: 11, pellets: 1 },
+        { cal: ".45 ACP", name: "RIP", pen: 3, dmg: 130, armorDmg: 12, pellets: 1 },
+        { cal: "9x18", name: "PM SP7 gzh", pen: 2, dmg: 77, armorDmg: 5, pellets: 1 },
+        { cal: "9x19", name: "RIP", pen: 2, dmg: 102, armorDmg: 11, pellets: 1 },
+        { cal: "9x18", name: "PM SP8 gzh", pen: 1, dmg: 67, armorDmg: 2, pellets: 1 },
+    ];
+
+    // ================= 武器数据库（auto: false 表示非全自动，排行榜中过滤） =================
+    const weaponsByCaliber = {
+        "9x39": [{ name: "AS VAL \"巨浪\"", rpm: 900 }, { name: "VSS \"绞丝机\"", rpm: 900, auto: false }, { name: "SR-3M", rpm: 900 }, { name: "AS \"巨浪\" MOD.4", rpm: 900 }, { name: "KBP 9A-91", rpm: 700 }, { name: "KBP VSK-94", rpm: 700, auto: false }],
+        "9x21": [{ name: "SR-2M 石楠", rpm: 950 }, { name: "谢尔久科夫 SR1MP \"斑蝰蛇\"", rpm: 30, auto: false }],
+        "9x19": [{ name: "GLOCK 18C", rpm: 1200 }, { name: "B&T MP9-N", rpm: 1100 }, { name: "IWI UZI PRO Pistol", rpm: 1075 }, { name: "IWI UZI PRO SMG", rpm: 1075 }, { name: "TDI KRISS Vector Gen.2", rpm: 950 }, { name: "B&T MP9", rpm: 900 }, { name: "HK MP5K", rpm: 900 }, { name: "SIG MPX", rpm: 850 }, { name: "HK MP5", rpm: 800 }, { name: "联盟 - TM STM-9 Gen.2", rpm: 800 }, { name: "PP-19-01 勇士", rpm: 700 }, { name: "Saiga-9", rpm: 650, auto: false }, { name: "IWI UZI", rpm: 600 }, { name: "雅利金 MP-443 \"乌鸦\"", rpm: 30, auto: false }, { name: "SIG P226R", rpm: 30, auto: false }, { name: "Glock 17", rpm: 30, auto: false }, { name: "伯莱塔 M9A3", rpm: 30, auto: false }, { name: "列别杰夫 PL-15", rpm: 30, auto: false }, { name: "Chiappa 犀牛 200DS", rpm: 30, auto: false }, { name: "Glock 19X", rpm: 30, auto: false }],
+        "9x18": [{ name: "PP-9 楔子", rpm: 1000 }, { name: "PP-91 雪松", rpm: 900 }, { name: "PP-91-01 雪松 - B", rpm: 900 }, { name: "斯捷奇金 APB", rpm: 750 }, { name: "斯捷奇金 APS", rpm: 750 }, { name: "PB 消音手枪", rpm: 30, auto: false }, { name: "马卡洛夫", rpm: 30, auto: false }, { name: "马卡洛夫 PM (t)", rpm: 30, auto: false }],
+        "9.3x64": [{ name: "TKPD", rpm: 25, auto: false }],
+        "7.62x54R": [{ name: "Tokarev AVT-40", rpm: 750 }, { name: "德拉贡诺夫 SVDS", rpm: 700, auto: false }, { name: "PKP", rpm: 650 }, { name: "PKM", rpm: 650 }, { name: "Tokarev SVT-40", rpm: 50, auto: false }, { name: "SV-98", rpm: 30, auto: false }, { name: "莫辛 - 纳甘 (狙击型)", rpm: 30, auto: false }, { name: "莫辛 - 纳甘 (步兵型)", rpm: 30, auto: false }, { name: "MP-18", rpm: 10, auto: false }],
+        "7.62x51": [{ name: "雷明顿 R11 RSASS", rpm: 700, auto: false }, { name: "春田 M1A", rpm: 700, auto: false }, { name: "DS Arms SA-58", rpm: 700 }, { name: "奈特军械公司 (KAC) SR-25", rpm: 700, auto: false }, { name: "Kel-Tec RFB", rpm: 700, auto: false }, { name: "HK G28", rpm: 700, auto: false }, { name: "AK-308", rpm: 700, auto: false }, { name: "沙漠科技 MDR", rpm: 650 }, { name: "FN SCAR-H", rpm: 600 }, { name: "VPO-101 Vepr-Hunter", rpm: 600, auto: false }, { name: "U.S Ordnance M60E4", rpm: 550 }, { name: "U.S Ordnance M60E6", rpm: 550 }, { name: "DVL-10", rpm: 30, auto: false }, { name: "雷明顿 Model 700", rpm: 30, auto: false }, { name: "ORSIS T-5000M", rpm: 30, auto: false }],
+        "7.62x39": [{ name: "RPD", rpm: 700 }, { name: "RPDN", rpm: 700 }, { name: "CMMG Mk47 Mutant", rpm: 650 }, { name: "AKM", rpm: 600 }, { name: "AKMN", rpm: 600 }, { name: "AKMS", rpm: 600 }, { name: "AKMSN", rpm: 600 }, { name: "AK-103", rpm: 600 }, { name: "AK-104", rpm: 600 }, { name: "Rifle Dynamics RD-704", rpm: 600 }, { name: "VPO-136 野猪 - KM", rpm: 600 }, { name: "西蒙诺夫 SKS", rpm: 40, auto: false }, { name: "西蒙诺夫 OP-SKS", rpm: 40, auto: false }],
+        "7.62x25": [{ name: "PPSh-41", rpm: 1000 }, { name: "托卡列夫 TT-33", rpm: 30, auto: false }, { name: "托卡列夫 TT-33 黄金手枪", rpm: 30, auto: false }],
+        "6.8x51": [{ name: "SIG MCX SPEAR", rpm: 800 }],
+        "5.8x42": [{ name: "北方工业 QBZ-191", rpm: 750 }],
+        "5.7x28": [{ name: "FN P90", rpm: 900 }, { name: "FN Five-seveN MK2", rpm: 30, auto: false }],
+        "5.56x45": [{ name: "HK 416A5", rpm: 850 }, { name: "柯尔特 M4A1", rpm: 800 }, { name: "ADAR 2-15", rpm: 800, auto: false }, { name: "Lone Star TX-15 DML", rpm: 800, auto: false }, { name: "柯尔特 M16A1", rpm: 800 }, { name: "雷电 Model 1 FA", rpm: 800 }, { name: "柯尔特 M16A2", rpm: 800 }, { name: "HK G36", rpm: 750 }, { name: "Steyr AUG A1", rpm: 715 }, { name: "Steyr AUG A3", rpm: 715 }, { name: "丰和 20 式", rpm: 700 }, { name: "AK-101", rpm: 650 }, { name: "沙漠科技 MDR", rpm: 650 }, { name: "FN SCAR-L", rpm: 650 }, { name: "AK-102", rpm: 600 }],
+        "5.45x39": [{ name: "NL545 (GP)", rpm: 850 }, { name: "NL545 (DI)", rpm: 800 }, { name: "AK-12", rpm: 700 }, { name: "AK-74N", rpm: 650 }, { name: "AKS-74U", rpm: 650 }, { name: "AKS-74UB", rpm: 650 }, { name: "AKS-74UN", rpm: 650 }, { name: "AKS-74N", rpm: 650 }, { name: "AK-74M", rpm: 650 }, { name: "AK-74", rpm: 650 }, { name: "AKS-74", rpm: 650 }, { name: "RPK-16", rpm: 650 }, { name: "SAG AK-545", rpm: 650 }, { name: "AK-105", rpm: 600 }],
+        "4.6x30": [{ name: "HK MP7A1", rpm: 950 }, { name: "HK MP7A2", rpm: 950 }],
+        "12.7x55": [{ name: "ASh-12", rpm: 650 }, { name: "RSh-12", rpm: 30, auto: false }],
+        "23x75": [{ name: "TOZ KS-23M", rpm: 30, auto: false }],
+        "20/70": [{ name: "TOZ-106", rpm: 30, auto: false }],
+        ".50 BMG": [{ name: "TheAKGuy AK-50", rpm: 30, auto: false }],
+        ".50 AE": [{ name: "沙漠之鹰 L6", rpm: 30, auto: false }, { name: "沙漠之鹰 L5", rpm: 30, auto: false }, { name: "沙漠之鹰 Mk XIX", rpm: 30, auto: false }],
+        ".45 ACP": [{ name: "TDI KRISS Vector Gen.2", rpm: 1100 }, { name: "HK UMP", rpm: 600 }, { name: "柯尔特 M1911A1", rpm: 30, auto: false }, { name: "柯尔特 M45A1", rpm: 30, auto: false }, { name: "HK USP", rpm: 30, auto: false }],
+        ".366": [{ name: "VPO-209", rpm: 600, auto: false }, { name: "VPO-215 雪貂", rpm: 30, auto: false }],
+        ".357 Magnum": [{ name: "Chiappa 犀牛 50DS", rpm: 30, auto: false }, { name: "沙漠之鹰 L5", rpm: 30, auto: false }],
+        ".338 Lapua": [{ name: "SWORD International Mk-18", rpm: 30, auto: false }, { name: "Accuracy International AXMC", rpm: 30, auto: false }, { name: "Sako TRG M10", rpm: 30, auto: false }],
+        ".308": [{ name: "马林 MXLR", rpm: 100, auto: false }],
+        ".300 Blackout": [{ name: "SIG MCX", rpm: 800 }, { name: "Aklys Defense 迅猛龙", rpm: 600 }],
+    };
+
+    const caliberOrder = [".50 BMG", ".338 Lapua", "7.62x54R", "7.62x51", "9.3x64", "5.45x39", "5.56x45", "7.62x39", "6.8x51", "5.8x42", "12.7x55", "9x39", ".300 Blackout", "4.6x30", "5.7x28", "9x19", "9x21", "9x18", ".45 ACP", ".50 AE", ".357 Magnum", ".366", ".308", "23x75", "20/70"];
+    const bullets = [];
+    const bulletsByCal = {};
+    caliberOrder.forEach(cal => {
+        const group = rawBullets.filter(b => b.cal === cal);
+        group.sort((a, b) => b.pen - a.pen);
+        bulletsByCal[cal] = group;
+        bullets.push(...group);
+    });
+
+    // ================= 护甲数据库 =================
+    const armors = [
+        { name: "NESCO 4400-SA-MC ballistic plate", class: 6, bt: 0.22, maxDur: 160, mat: "复合材料", pos: "前后", weightClass: "heavy" },
+        { name: "Cult Termite ballistic plate", class: 6, bt: 0.14, maxDur: 157, mat: "钛", pos: "前后", weightClass: "heavy" },
+        { name: "GAC 4sss2 ballistic plate", class: 6, bt: 0.26, maxDur: 148, mat: "超高分子聚乙烯", pos: "前后", weightClass: "light" },
+        { name: "KITECO SC-IV SA ballistic plate", class: 6, bt: 0.26, maxDur: 133, mat: "超高分子聚乙烯", pos: "前后", weightClass: "light" },
+        { name: "Korund-VM-K ballistic plates (Front)", class: 6, bt: 0.29, maxDur: 109, mat: "陶瓷", pos: "前", weightClass: "heavy" },
+        { name: "Granit Br5 ballistic plate", class: 6, bt: 0.28, maxDur: 109, mat: "陶瓷", pos: "前后", weightClass: "heavy" },
+        { name: "ESAPI level IV ballistic plate", class: 6, bt: 0.30, maxDur: 99, mat: "陶瓷", pos: "前后", weightClass: "heavy" },
+        { name: "Granit 4RS ballistic plate (Front)", class: 6, bt: 0.28, maxDur: 99, mat: "陶瓷", pos: "前", weightClass: "heavy" },
+        { name: "Kiba Arms Steel ballistic plate", class: 6, bt: 0.18, maxDur: 95, mat: "装甲钢", pos: "前后", weightClass: "heavy" },
+        { name: "Granit 4RS ballistic plates (Back)", class: 6, bt: 0.29, maxDur: 90, mat: "陶瓷", pos: "后", weightClass: "heavy" },
+        { name: "Korund-VM-K ballistic plate (Back)", class: 6, bt: 0.29, maxDur: 81, mat: "陶瓷", pos: "后", weightClass: "heavy" },
+        { name: "Granit ballistic plate (Side)", class: 6, bt: 0.28, maxDur: 36, mat: "陶瓷", pos: "侧", weightClass: "heavy" },
+        { name: "ESBI level IV ballistic plate (Side)", class: 6, bt: 0.30, maxDur: 32, mat: "陶瓷", pos: "侧", weightClass: "heavy" },
+        { name: "TallCom Guardian ballistic plate", class: 5, bt: 0.18, maxDur: 146, mat: "复合材料", pos: "前后", weightClass: "heavy" },
+        { name: "Cult Locust ballistic plate", class: 5, bt: 0.14, maxDur: 145, mat: "钛", pos: "前后", weightClass: "heavy" },
+        { name: "GAC 3s15m ballistic plate", class: 5, bt: 0.26, maxDur: 133, mat: "超高分子聚乙烯", pos: "前后", weightClass: "light" },
+        { name: "Korund-VM ballistic plates (Front)", class: 5, bt: 0.18, maxDur: 114, mat: "装甲钢", pos: "前", weightClass: "heavy" },
+        { name: "Granit Br4 ballistic plate", class: 5, bt: 0.28, maxDur: 99, mat: "陶瓷", pos: "前后", weightClass: "heavy" },
+        { name: "Granit 4 ballistic plate (Front)", class: 5, bt: 0.28, maxDur: 90, mat: "陶瓷", pos: "前", weightClass: "heavy" },
+        { name: "SAPI level III+ ballistic plate", class: 5, bt: 0.30, maxDur: 90, mat: "陶瓷", pos: "前后", weightClass: "heavy" },
+        { name: "Granit 4 ballistic plates (Back)", class: 5, bt: 0.29, maxDur: 81, mat: "陶瓷", pos: "后", weightClass: "heavy" },
+        { name: "Korund-VM ballistic plate (Back)", class: 5, bt: 0.18, maxDur: 76, mat: "装甲钢", pos: "后", weightClass: "heavy" },
+        { name: "Korund-VM ballistic plate (Side)", class: 5, bt: 0.18, maxDur: 47, mat: "装甲钢", pos: "侧", weightClass: "heavy" },
+        { name: "SSAPI level III+ ballistic plate (Side)", class: 5, bt: 0.30, maxDur: 27, mat: "陶瓷", pos: "侧", weightClass: "heavy" },
+        { name: "Kiba Arms Titan ballistic plate", class: 4, bt: 0.14, maxDur: 133, mat: "钛", pos: "前后", weightClass: "heavy" },
+        { name: "SPRTN Omega ballistic plate", class: 4, bt: 0.18, maxDur: 133, mat: "复合材料", pos: "前后", weightClass: "heavy" },
+        { name: "Monoclete level III PE ballistic plate", class: 4, bt: 0.26, maxDur: 118, mat: "超高分子聚乙烯", pos: "前后", weightClass: "light" },
+        { name: "NewSphereTech level III ballistic plate", class: 4, bt: 0.27, maxDur: 100, mat: "铝", pos: "前后", weightClass: "light" },
+        { name: "6B33 ballistic plate (Front)", class: 4, bt: 0.18, maxDur: 95, mat: "装甲钢", pos: "前", weightClass: "heavy" },
+        { name: "Global Armor's Steel ballistic plate", class: 4, bt: 0.18, maxDur: 85, mat: "装甲钢", pos: "前后", weightClass: "heavy" },
+        { name: "6B13 custom ballistic plates (Back)", class: 4, bt: 0.18, maxDur: 85, mat: "装甲钢", pos: "后", weightClass: "heavy" },
+        { name: "SPRTN Elaphros ballistic plate", class: 4, bt: 0.30, maxDur: 81, mat: "陶瓷", pos: "前后", weightClass: "heavy" },
+        { name: "6B23-2 ballistic plate (Back)", class: 4, bt: 0.18, maxDur: 76, mat: "装甲钢", pos: "后", weightClass: "heavy" },
+        { name: "AR500 Legacy Plate ballistic plate", class: 3, bt: 0.18, maxDur: 120, mat: "复合材料", pos: "前后", weightClass: "heavy" },
+        { name: "Zhuk-3 ballistic plate (Front)", class: 3, bt: 0.24, maxDur: 118, mat: "超高分子聚乙烯", pos: "前", weightClass: "light" },
+        { name: "PRTCTR Lightweight ballistic plate", class: 3, bt: 0.26, maxDur: 103, mat: "超高分子聚乙烯", pos: "前后", weightClass: "light" },
+        { name: "6B12 ballistic plates (Front)", class: 3, bt: 0.18, maxDur: 95, mat: "装甲钢", pos: "前", weightClass: "heavy" },
+    ];
+
+    // ================= 核心计算 =================
+    const THORAX_HP = 85;
+
+    const calcArmorDefense = (durPct, armorClass) => (121 - 5000 / (45 + durPct * 2)) * armorClass * 0.1;
+
+    function calcEffectiveClass(durPct, armorClass) {
+        const a = calcArmorDefense(durPct, armorClass);
+        const aOne = Math.floor(a * 10) / 10;
+        const intPart = Math.floor(aOne / 10);
+        const decPart = aOne - intPart * 10;
+        const eff = intPart + (decPart > 0 ? 1 : 0);
+        return Math.min(armorClass, Math.max(1, eff));
+    }
+
+    function calcPenChance(pen, a) {
+        if (pen <= a - 15) return 0;
+        if (pen < a) return Math.min(1, 0.4 * (a - pen - 15) ** 2 / 100);
+        const denom = 0.9 * a - pen;
+        if (Math.abs(denom) < 1e-9) return 1;
+        return Math.max(0, Math.min(1, (100 + pen / denom) / 100));
+    }
+
+    const calcPenetratingDamage = (pen, a, dmg, pellets) =>
+        dmg * pellets * Math.max(0.6, Math.min(1, pen / (a + 12.5)));
+
+    function calcArmorLoss(armorDmg, matCoef, penetrated, pen, a, pellets) {
+        const base = armorDmg * pellets * matCoef;
+        if (!penetrated) return base;
+        const overflow = Math.min(1, Math.max(0, (pen - a) / (2 * a)));
+        return base * (0.8 + 0.1 * overflow);
+    }
+
+    function calcDoubleLayerExpected(bullet, armor, plateDurPct, linerDurPct, skillReduction, ricochetChance) {
+        const pellets = bullet.pellets || 1;
+        const plateBroken = plateDurPct <= 0;
+        const linerBroken = linerDurPct <= 0;
+        const group = bulletsByCal[bullet.cal] || [];
+        const fixedBlunt = calcFixedBlunt(bullet, armor, group, skillReduction);
+
+        if (linerBroken) {
+            return {
+                finalDmg: bullet.dmg * pellets * (1 - ricochetChance),
+                plateLoss: 0, linerLoss: 0, penChance: 1,
+                penDmg: bullet.dmg * pellets, bluntDmg: 0, plateA: 0, linerA: 0
+            };
+        }
+
+        const linerA = calcArmorDefense(linerDurPct, LINER.class);
+
+        if (plateBroken) {
+            const penChance = calcPenChance(bullet.pen, linerA);
+            const penDmg = calcPenetratingDamage(bullet.pen, linerA, bullet.dmg, pellets);
+            const linerLoss = penChance * calcArmorLoss(bullet.armorDmg, LINER.matDamage, true, bullet.pen, linerA, pellets)
+                            + (1 - penChance) * calcArmorLoss(bullet.armorDmg, LINER.matDamage, false, bullet.pen, linerA, pellets);
+            return {
+                finalDmg: penChance * penDmg * (1 - ricochetChance),
+                plateLoss: 0, linerLoss, penChance, penDmg, bluntDmg: 0, plateA: 0, linerA
+            };
+        }
+
+        const plateA = calcArmorDefense(plateDurPct, armor.class);
+        const platePenChance = calcPenChance(bullet.pen, plateA);
+        const platePenDmg = calcPenetratingDamage(bullet.pen, plateA, bullet.dmg, pellets);
+        const penAfter = bullet.pen * getPenDecay(armor.mat);
+        const linerPenChance = calcPenChance(penAfter, linerA);
+        const linerPenDmg = calcPenetratingDamage(penAfter, linerA, platePenDmg, 1);
+        const linerExpected = linerPenChance * linerPenDmg;
+
+        const finalDmg = (platePenChance * linerExpected + (1 - platePenChance) * fixedBlunt) * (1 - ricochetChance);
+
+        const plateLoss = platePenChance * calcArmorLoss(bullet.armorDmg, getMatDamage(armor.mat), true, bullet.pen, plateA, pellets)
+                        + (1 - platePenChance) * calcArmorLoss(bullet.armorDmg, getMatDamage(armor.mat), false, bullet.pen, plateA, pellets);
+
+        const linerLoss = platePenChance * (linerPenChance * calcArmorLoss(bullet.armorDmg, LINER.matDamage, true, penAfter, linerA, pellets)
+                                          + (1 - linerPenChance) * calcArmorLoss(bullet.armorDmg, LINER.matDamage, false, penAfter, linerA, pellets));
+
+        return { finalDmg, plateLoss, linerLoss, penChance: platePenChance, penDmg: linerPenDmg, bluntDmg: fixedBlunt, plateA, linerA };
+    }
+
+    // ================= UI 初始化 =================
+    const $ = id => document.getElementById(id);
+    const bulletSelect = $('bulletSelect'), armorSelect = $('armorSelect'), weaponSelect = $('weaponSelect');
+    const durabilityInput = $('durability'), durabilityValue = $('durabilityValue');
+    const customRpm = $('customRpm'), rpmValue = $('rpmValue');
+    const armorSkillInput = $('armorSkill'), armorSkillValue = $('armorSkillValue');
+    const simTbody = document.querySelector('#simTable tbody');
+
+    let currentCal = "";
+    bullets.forEach((b, i) => {
+        if (b.cal !== currentCal) {
+            currentCal = b.cal;
+            const grp = document.createElement('option');
+            grp.disabled = true;
+            grp.textContent = `── ${b.cal} ──`;
+            bulletSelect.appendChild(grp);
+        }
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `${b.name} (穿:${b.pen} 肉:${b.dmg} 甲:${b.armorDmg})`;
+        bulletSelect.appendChild(opt);
+    });
+
+    armors.forEach((a, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `[${a.class}] ${a.name} (${a.weightClass === "heavy" ? "重甲" : "轻甲"}-${a.pos}-钝伤${(a.bt * 100).toFixed(0)}%-等效耐久${a.maxDur}-${a.mat})`;
+        armorSelect.appendChild(opt);
+        if (a.name === "Cult Termite ballistic plate") armorSelect.value = i;
+    });
+
+    function updateWeapons(cal) {
+        weaponSelect.innerHTML = '';
+        const weapons = weaponsByCaliber[cal] || [];
+        if (!weapons.length) {
+            const opt = document.createElement('option');
+            opt.value = 30; opt.textContent = '无对应武器';
+            weaponSelect.appendChild(opt);
+            customRpm.value = 30; rpmValue.textContent = 30;
+            return;
+        }
+        weapons.sort((a, b) => b.rpm - a.rpm);
+        weapons.forEach(w => {
+            const opt = document.createElement('option');
+            opt.value = w.rpm; opt.textContent = `${w.name} (${w.rpm} 发/分)`;
+            weaponSelect.appendChild(opt);
+        });
+        customRpm.value = weapons[0].rpm;
+        rpmValue.textContent = weapons[0].rpm;
+    }
+
+    const getSkillReduction = (wc, lv) => wc === "heavy" ? (lv >= 51 ? 0.20 : lv * 0.004) : 0;
+    const getRicochetChance = (wc, lv) => (wc === "heavy" && lv >= 51) ? 0.20 : 0;
+
+    function update() {
+        const bullet = bullets[bulletSelect.value];
+        const armor = armors[armorSelect.value];
+        const currentDurPct = parseInt(durabilityInput.value);
+        const rpm = parseInt(customRpm.value);
+        const skillLevel = parseInt(armorSkillInput.value);
+        const linerDurPct = 100;
+
+        if (!bullet || !armor) return;
+
+        const skillReduction = getSkillReduction(armor.weightClass, skillLevel);
+        const ricochetChance = getRicochetChance(armor.weightClass, skillLevel);
+
+        $('armorTypeDisplay').textContent = armor.weightClass === "heavy" ? "重甲" : "轻甲";
+        $('bluntReductionDisplay').textContent = `${(skillReduction * 100).toFixed(1)}%`;
+        $('ricochetRow').style.display = (armor.weightClass === "heavy" && skillLevel >= 51) ? "flex" : "none";
+
+        const result = calcDoubleLayerExpected(bullet, armor, currentDurPct, linerDurPct, skillReduction, ricochetChance);
+
+        $('penChance').textContent = `${(result.penChance * 100).toFixed(1)}%`;
+        $('finalDamage').textContent = result.penDmg.toFixed(1);
+        $('bluntDamage').textContent = result.bluntDmg.toFixed(1);
+        $('expectedDamage').textContent = result.finalDmg.toFixed(1);
+        $('armorLoss').textContent = (result.plateLoss + result.linerLoss).toFixed(2);
+        $('remainingDurability').textContent = Math.max(0, currentDurPct - (result.plateLoss / armor.maxDur) * 100).toFixed(1) + '%';
+        $('effClass').textContent = currentDurPct <= 0 ? `${LINER.class}（甲皮）` : calcEffectiveClass(currentDurPct, armor.class);
+        $('effDefense').textContent = currentDurPct <= 0 ? calcArmorDefense(linerDurPct, LINER.class).toFixed(1) : result.plateA.toFixed(1);
+        $('pelletCount').textContent = bullet.pellets || 1;
+
+        simTbody.innerHTML = '';
+        let simPlateDur = currentDurPct, simLinerDur = linerDurPct, thoraxHP = THORAX_HP, shotNum = 0;
+        const maxShots = 100;
+        const fireIntervalMs = 60000 / rpm;
+
+        while (thoraxHP > 0 && shotNum < maxShots) {
+            shotNum++;
+            const r = calcDoubleLayerExpected(bullet, armor, simPlateDur, simLinerDur, skillReduction, ricochetChance);
+            thoraxHP = Math.max(0, thoraxHP - r.finalDmg);
+            simPlateDur = Math.max(0, simPlateDur - (r.plateLoss / armor.maxDur) * 100);
+            simLinerDur = Math.max(0, simLinerDur - (r.linerLoss / LINER.maxDur) * 100);
+
+            const plateDisplay = simPlateDur <= 0 ? '<span class="broken">已击穿</span>' : `${simPlateDur.toFixed(1)}%`;
+            const linerDisplay = simLinerDur <= 0 ? '<span class="broken">已击穿</span>' : `${simLinerDur.toFixed(1)}%`;
+            const hpDisplay = thoraxHP <= 0 ? '<span style="color:var(--red);font-weight:bold;">0.0</span>' : thoraxHP.toFixed(1);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${shotNum}</td>
+                <td>${plateDisplay}</td>
+                <td>${linerDisplay}</td>
+                <td>${r.plateA.toFixed(1)}</td>
+                <td>${r.linerA.toFixed(1)}</td>
+                <td>${(r.penChance * 100).toFixed(0)}%</td>
+                <td>${r.penDmg.toFixed(1)}</td>
+                <td>${r.bluntDmg.toFixed(1)}</td>
+                <td style="color:var(--yellow);font-weight:bold;">${r.finalDmg.toFixed(1)}</td>
+                <td>${r.plateLoss.toFixed(2)}</td>
+                <td>${r.linerLoss.toFixed(2)}</td>
+                <td>${hpDisplay}</td>
+                <td style="color:var(--accent);">${((shotNum - 1) * fireIntervalMs).toFixed(0)}</td>
+            `;
+            simTbody.appendChild(row);
+        }
+    }
+
+    // ================= TTK 排行榜（仅全自动，每种子弹取射速前二且射速去重，前200） =================
+    function calcTTK(bullet, armor, rpm) {
+        const skillReduction = 0.10;
+        const ricochetChance = 0;
+        const linerDurPct = 100;
+        let plateDur = 100, thoraxHP = THORAX_HP, shotNum = 0;
+        const maxShots = 100;
+        while (thoraxHP > 0 && shotNum < maxShots) {
+            shotNum++;
+            const r = calcDoubleLayerExpected(bullet, armor, plateDur, linerDurPct, skillReduction, ricochetChance);
+            thoraxHP = Math.max(0, thoraxHP - r.finalDmg);
+            plateDur = Math.max(0, plateDur - (r.plateLoss / armor.maxDur) * 100);
+            if (thoraxHP <= 0) break;
+        }
+        return { ttk: (shotNum - 1) * (60000 / rpm), shots: shotNum };
+    }
+
+    function buildRanking() {
+        const titaniumPlate = armors.find(a => a.name === "Cult Termite ballistic plate");
+        if (!titaniumPlate) return [];
+
+        const results = [];
+        for (const bullet of bullets) {
+            const autoWeapons = (weaponsByCaliber[bullet.cal] || []).filter(w => w.auto !== false);
+            // 按 RPM 降序，去重相同射速（保留第一个），取前 2
+            const seenRpm = new Set();
+            const picked = [];
+            for (const w of autoWeapons.sort((a, b) => b.rpm - a.rpm)) {
+                if (seenRpm.has(w.rpm)) continue;
+                seenRpm.add(w.rpm);
+                picked.push(w);
+                if (picked.length >= 2) break;
+            }
+            for (const weapon of picked) {
+                const { ttk, shots } = calcTTK(bullet, titaniumPlate, weapon.rpm);
+                if (shots >= 100) continue;
+                results.push({ bullet, weapon, ttk, shots });
+            }
+        }
+        results.sort((a, b) => a.ttk - b.ttk);
+        return results.slice(0, 200);
+    }
+
+    function renderRanking() {
+        const data = buildRanking();
+        const tbody = document.querySelector('#rankTable tbody');
+        tbody.innerHTML = '';
+        data.forEach((d, i) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${i + 1}</td>
+                <td>${d.bullet.cal}</td>
+                <td>${d.bullet.name || '—'}</td>
+                <td>${d.weapon.name}</td>
+                <td>${d.weapon.rpm}</td>
+                <td>${d.bullet.pen}</td>
+                <td>${d.bullet.dmg}</td>
+                <td style="color:var(--accent);font-weight:bold;">${d.ttk.toFixed(0)}</td>
+                <td>${d.shots}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    $('rankBtn').addEventListener('click', () => {
+        renderRanking();
+        $('rankModal').classList.add('active');
+    });
+    $('rankClose').addEventListener('click', () => $('rankModal').classList.remove('active'));
+    $('rankModal').addEventListener('click', e => {
+        if (e.target === $('rankModal')) $('rankModal').classList.remove('active');
+    });
+
+    // ================= 事件绑定 =================
+    bulletSelect.addEventListener('change', () => {
+        const bullet = bullets[bulletSelect.value];
+        if (bullet) updateWeapons(bullet.cal);
+        update();
+    });
+    weaponSelect.addEventListener('change', e => { customRpm.value = e.target.value; rpmValue.textContent = e.target.value; update(); });
+    customRpm.addEventListener('input', e => { rpmValue.textContent = e.target.value; update(); });
+    armorSkillInput.addEventListener('input', e => { armorSkillValue.textContent = e.target.value === "51" ? "精英" : e.target.value; update(); });
+    armorSelect.addEventListener('change', update);
+    durabilityInput.addEventListener('input', e => { durabilityValue.textContent = e.target.value + '%'; update(); });
+
+    const initBullet = bullets[bulletSelect.value];
+    if (initBullet) updateWeapons(initBullet.cal);
+    update();
+</script>
+</body>
+</html>
